@@ -1,0 +1,307 @@
+import pandas as pd
+import numpy as np
+from hmmlearn import hmm
+import warnings
+warnings.filterwarnings('ignore')
+
+# Load data
+data = pd.read_csv('')
+
+# Extract first column for analysis
+X = data.iloc[:, [0]]  
+X_array = X.values.reshape(-1, 1)  
+
+print(f"Data shape: {X.shape}")
+print(f"First column statistics:")
+print(f"Mean: {X.iloc[:, 0].mean():.4f}")
+print(f"Std: {X.iloc[:, 0].std():.4f}")
+print(f"Min: {X.iloc[:, 0].min():.4f}")
+print(f"Max: {X.iloc[:, 0].max():.4f}")
+
+def fit_hmm_model(X_array, n_states, n_mix, max_iter=100):
+
+
+
+    try:
+        model = hmm.GMMHMM(n_components=n_states, n_mix=n_mix,
+                          covariance_type='full', n_iter=max_iter,
+                          random_state=42, tol=1e-4)
+
+        # Fit the model
+        model.fit(X_array)
+
+        return model
+    except Exception as e:
+        print(f"Error fitting model with {n_states} states and {n_mix} mixtures: {e}")
+        return None
+
+def calculate_information_criteria(model, X_array):
+    """
+    Calculate AIC, BIC, and log-likelihood for model selection
+    """
+    try:
+        log_likelihood = model.score(X_array)
+        n_samples = len(X_array)
+
+
+        n_states = model.n_components
+        n_mix = model.n_mix
+        n_features = X_array.shape[1]
+
+
+        n_params = (n_states - 1) + (n_states * (n_states - 1)) + \
+                  (n_states * n_mix * n_features) + \
+                  (n_states * n_mix * n_features * (n_features + 1) // 2) + \
+                  (n_states * (n_mix - 1))
+
+        aic = -2 * log_likelihood + 2 * n_params
+        bic = -2 * log_likelihood + n_params * np.log(n_samples)
+
+        return log_likelihood, aic, bic, n_params
+    except Exception as e:
+        print(f"Error calculating criteria: {e}")
+        return None, None, None, None
+
+
+n_states = 2 
+n_mix_range = range(1, 6)  
+
+
+results = []
+
+print("\nFitting HMM models with different numbers of mixture components...")
+print("=" * 70)
+
+for n_mix in n_mix_range:
+    print(f"\nFitting model with {n_states} states and {n_mix} mixture components...")
+
+    # Fit model
+    model = fit_hmm_model(X_array, n_states, n_mix)
+
+    if model is not None:
+        log_likelihood, aic, bic, n_params = calculate_information_criteria(model, X_array)
+
+        if log_likelihood is not None:
+            results.append({
+                'n_states': n_states,
+                'n_mix': n_mix,
+                'log_likelihood': log_likelihood,
+                'AIC': aic,
+                'BIC': bic,
+                'n_params': n_params
+            })
+
+            print(f"  Log-likelihood: {log_likelihood:.4f}")
+            print(f"  AIC: {aic:.4f}")
+            print(f"  BIC: {bic:.4f}")
+            print(f"  Parameters: {n_params}")
+        else:
+            print(f"  Failed to calculate criteria")
+    else:
+        print(f"  Failed to fit model")
+
+if results:
+    results_df = pd.DataFrame(results)
+
+    print("\n" + "=" * 70)
+    print("MODEL SELECTION RESULTS")
+    print("=" * 70)
+
+
+    print("\nComplete Results Table:")
+    print(results_df[['n_states', 'n_mix', 'log_likelihood', 'AIC', 'BIC', 'n_params']].to_string(index=False, float_format='%.4f'))
+
+
+
+#########Apply
+import pandas as pd
+import numpy as np
+import random
+from sklearn.cluster import KMeans
+from hmmlearn import hmm
+import warnings
+warnings.filterwarnings('ignore')
+
+# Load data
+data = pd.read_csv('')
+
+def initialize_hmm_with_kmeans(X_column, n_states=2, n_mix=3):
+    X_array = X_column.values.reshape(-1, 1)
+
+
+    total_clusters = n_states * n_mix  
+    kmeans = KMeans(n_clusters=total_clusters, random_state=42, n_init=10)
+    cluster_labels = kmeans.fit_predict(X_array)
+    cluster_centers = kmeans.cluster_centers_
+
+    print(f"K-means found {total_clusters} clusters")
+    print(f"Cluster centers: {cluster_centers.flatten()}")
+
+
+    means = np.zeros((n_states, n_mix, 1))  
+    covars = np.zeros((n_states, n_mix, 1, 1)) 
+    weights = np.ones((n_states, n_mix)) / n_mix  
+
+    for state in range(n_states):
+        for mix in range(n_mix):
+            cluster_idx = state * n_mix + mix  
+
+
+            cluster_mask = cluster_labels == cluster_idx
+            cluster_data = X_array[cluster_mask]
+
+            if len(cluster_data) == 0:
+                means[state, mix, 0] = cluster_centers[cluster_idx]
+                covars[state, mix, 0, 0] = 1.0
+                print(f"Warning: Empty cluster {cluster_idx} (State {state}, Mix {mix})")
+            else:
+
+                means[state, mix, 0] = np.mean(cluster_data)
+                if len(cluster_data) > 1:
+                    covars[state, mix, 0, 0] = np.var(cluster_data)
+                else:
+                    covars[state, mix, 0, 0] = 1.0
+
+                print(f"Cluster {cluster_idx} -> State {state}, Mix {mix}: "
+                      f"mean={means[state, mix, 0]:.3f}, var={covars[state, mix, 0, 0]:.3f}, "
+                      f"size={len(cluster_data)}")
+
+
+    startprob = np.ones(n_states) / n_states
+
+
+    transmat = np.ones((n_states, n_states)) / n_states
+
+    return means, covars, weights, startprob, transmat
+
+# Set parameters
+X = data.iloc[:, :]
+random.seed(118)
+np.random.seed(118)
+
+
+model_mean = []
+model_startprob = []
+model_transmat = []
+model_covar = []
+model_weights = []
+
+print(f"Processing {len(X.columns)} columns...")
+print("=" * 70)
+
+for i in range(0, len(X.columns)):
+    print(f"\nProcessing column {i+1}/{len(X.columns)}")
+    print("-" * 40)
+
+    num_component = 2  
+    num_mix = 3       
+
+
+    kmeans_means, kmeans_covars, kmeans_weights, uniform_startprob, uniform_transmat = initialize_hmm_with_kmeans(
+        X.iloc[:, [i]], n_states=num_component, n_mix=num_mix
+    )
+
+
+    model = hmm.GMMHMM(n_components=num_component, n_mix=num_mix,
+                      covariance_type='full', n_iter=10, random_state=118)
+
+
+    model.startprob_ = uniform_startprob
+    model.transmat_ = uniform_transmat
+    model.means_ = kmeans_means
+    model.covars_ = kmeans_covars
+    model.weights_ = kmeans_weights
+
+    print(f"Initial parameters set:")
+    print(f"  Start probabilities: {model.startprob_}")
+    print(f"  Transition matrix:\n{model.transmat_}")
+    print(f"  Means shape: {model.means_.shape}")
+    print(f"  Covars shape: {model.covars_.shape}")
+    print(f"  Weights shape: {model.weights_.shape}")
+
+
+    print("Fitting HMM...")
+    model.fit(X.iloc[:, [i]])
+    print("HMM fitting completed")
+
+    mm = model.means_
+    for l in mm:
+        model_mean.append(l)
+
+    ms = model.startprob_
+    for l in ms:
+        model_startprob.append(l)
+
+    mt = model.transmat_
+    for l in mt:
+        model_transmat.append(l)
+
+    mv = model.covars_
+    for l in mv:
+        model_covar.append(l)
+
+    mw = model.weights_
+    for l in mw:
+        model_weights.append(l)
+
+print(f"\n{'='*70}")
+print("Reshaping and organizing results...")
+
+
+model_mean = np.array(model_mean)
+model_mean = model_mean.reshape((len(X.columns), 6))
+
+model_startprob = np.asarray(model_startprob)
+model_startprob = model_startprob.reshape((len(X.columns), 2))
+
+model_transmat = np.asarray(model_transmat)
+model_transmat = model_transmat.reshape((len(X.columns), 4))
+
+model_covar = np.asarray(model_covar)
+model_covar = model_covar.reshape((len(X.columns), 6))
+
+model_weights = np.asarray(model_weights)
+model_weights = model_weights.reshape((len(X.columns), 6))
+
+# Convert to DataFrames
+model_mean = pd.DataFrame(model_mean)
+model_startprob = pd.DataFrame(model_startprob)
+model_transmat = pd.DataFrame(model_transmat)
+model_covar = pd.DataFrame(model_covar)
+model_weights = pd.DataFrame(model_weights)
+
+
+print(f"\n{'='*70}")
+print("FINAL RESULTS")
+print("="*70)
+
+print("\nModel Means (K-means initialized):")
+print(model_mean)
+
+print("\nModel Start Probabilities (Uniform initialized):")
+print(model_startprob)
+
+print("\nModel Transition Matrix (Uniform initialized):")
+print(model_transmat)
+
+print("\nModel Covariances (K-means initialized):")
+print(model_covar)
+
+print("\nModel Weights (K-means initialized):")
+print(model_weights)
+
+
+#HMM with label
+result = pd.concat(
+    [model_mean, model_startprob,model_transmat,model_covar,model_weights],
+     axis=1, ignore_index=True)
+result1 = result.set_axis(['m_s1_m1', 'm_s1_m2', 'm_s1_m3', 'm_s2_m1', 'm_s2_m2', 'm_s2_m3',
+                          's_a11','s_a12',
+                          't_a11','t_a12','t_a21','t_a22',
+                          'c_s1_m1','c_s1_m2','c_s1_m3','c_s2_m1','c_s2_m2','c_s2_m3',
+                          'w_a11','w_a12','w_a13','w_a21','w_a22','w_a23'], axis=1)
+
+
+result1['y'] = 3
+result1
+result1.to_csv('.csv',index=False)
