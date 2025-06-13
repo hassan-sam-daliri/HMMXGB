@@ -1,0 +1,633 @@
+####Best parameter
+import numpy as np
+from sklearn.model_selection import cross_val_score
+import xgboost as xgb
+import time
+from skopt import gp_minimize
+from skopt.space import Real, Integer
+from skopt.utils import use_named_args
+
+
+frames = [data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, data11, data12, data13, data14]
+data = pd.concat(frames, ignore_index=True)
+data = shuffle(data, random_state=3)
+data = data.sample(frac=1, random_state=13)
+print("Combined data shape:", data.shape)
+
+
+data.to_csv('data 6.csv', index=False)
+data = pd.read_csv('data 6.csv')
+X = data.iloc[:, :-1].values
+y = data.iloc[:, -1].values
+
+def bayesian_optimization_skopt(X_train, y_train, n_calls=50):
+
+    dimensions = [
+        Integer(50, 500, name='n_estimators'),
+        Integer(3, 10, name='max_depth'),
+        Real(0.01, 0.3, name='learning_rate'),
+        Real(0.6, 1.0, name='subsample'),
+        Real(0.6, 1.0, name='colsample_bytree'),
+        Real(0.0, 0.5, name='gamma'),
+        Integer(1, 10, name='min_child_weight'),
+        Real(0.0, 1.0, name='reg_alpha'),
+        Real(0.0, 1.0, name='reg_lambda')
+    ]
+
+    @use_named_args(dimensions=dimensions)
+    def objective(**params):
+        model = xgb.XGBClassifier(random_state=42, **params)
+        cv_scores = cross_val_score(
+            model, X_train, y_train,
+            cv=5,
+            scoring='accuracy',
+            n_jobs=-1
+        )
+        return -cv_scores.mean()
+
+    start_time = time.time()
+    result = gp_minimize(
+        func=objective,
+        dimensions=dimensions,
+        n_calls=n_calls,
+        random_state=42,
+        verbose=True
+    )
+    end_time = time.time()
+
+    best_params = {dim.name: result.x[i] for i, dim in enumerate(dimensions)}
+
+    print("\nBayesian Optimization completed.")
+    print(f"Time elapsed: {end_time - start_time:.2f} seconds")
+    print(f"Best CV Accuracy: {-result.fun:.5f}")
+    print(f"Best Parameters: {best_params}")
+
+    return best_params
+
+
+best_params = bayesian_optimization_skopt(X_train, y_train)
+
+
+
+
+
+#######Balanced
+from sklearn import metrics
+from sklearn.metrics import (accuracy_score, confusion_matrix, classification_report,
+                           precision_recall_fscore_support, balanced_accuracy_score,
+                           cohen_kappa_score, matthews_corrcoef, roc_auc_score,
+                           average_precision_score)
+from sklearn.model_selection import (learning_curve, cross_val_score, train_test_split,
+                                   StratifiedKFold, cross_validate)
+import seaborn as sns
+import xgboost as xgb
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.utils import shuffle
+
+
+frames = [data1, data2, data3, data4, data5, data6, data7, data8, data9, data10, data11, data12, data13, data14]
+data = pd.concat(frames, ignore_index=True)
+data = shuffle(data, random_state=3)
+data = data.sample(frac=1, random_state=13)
+print("Combined data shape:", data.shape)
+
+
+data.to_csv('data 6.csv', index=False)
+data = pd.read_csv('data 6.csv')
+X = data.iloc[:, :-1].values
+y = data.iloc[:, -1].values
+
+def cross_validation_evaluation(X, y, model, cv_folds=5, random_state=40):
+
+    print(f"\n{'='*60}")
+    print(f"5-FOLD CROSS VALIDATION RESULTS")
+    print(f"{'='*60}")
+
+
+    scoring = {
+        'accuracy': 'accuracy',
+        'balanced_accuracy': 'balanced_accuracy',
+        'precision_macro': 'precision_macro',
+        'recall_macro': 'recall_macro',
+        'f1_macro': 'f1_macro',
+        'precision_weighted': 'precision_weighted',
+        'recall_weighted': 'recall_weighted',
+        'f1_weighted': 'f1_weighted'
+    }
+
+
+    cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+    cv_results = cross_validate(model, X, y, cv=cv, scoring=scoring, return_train_score=True)
+
+
+    print(f"{'Fold':<6} {'Accuracy':<10} {'Bal_Acc':<10} {'F1_Macro':<10} {'F1_Weighted':<12}")
+    print("-" * 60)
+
+    for fold in range(cv_folds):
+        acc = cv_results['test_accuracy'][fold]
+        bal_acc = cv_results['test_balanced_accuracy'][fold]
+        f1_macro = cv_results['test_f1_macro'][fold]
+        f1_weighted = cv_results['test_f1_weighted'][fold]
+
+        print(f"{fold+1:<6} {acc:<10.5f} {bal_acc:<10.5f} {f1_macro:<10.5f} {f1_weighted:<12.5f}")
+
+
+    print("-" * 60)
+    print(f"{'Mean':<6} {cv_results['test_accuracy'].mean():<10.5f} "
+          f"{cv_results['test_balanced_accuracy'].mean():<10.5f} "
+          f"{cv_results['test_f1_macro'].mean():<10.5f} "
+          f"{cv_results['test_f1_weighted'].mean():<12.5f}")
+    print(f"{'Std':<6} {cv_results['test_accuracy'].std():<10.5f} "
+          f"{cv_results['test_balanced_accuracy'].std():<10.5f} "
+          f"{cv_results['test_f1_macro'].std():<10.5f} "
+          f"{cv_results['test_f1_weighted'].std():<12.5f}")
+
+    return cv_results
+
+def comprehensive_evaluation(y_true, y_pred, class_labels, scenario_name):
+
+    print(f"\n{'='*60}")
+    print(f"EVALUATION RESULTS - {scenario_name}")
+    print(f"{'='*60}")
+
+
+    accuracy = accuracy_score(y_true, y_pred)
+    balanced_acc = balanced_accuracy_score(y_true, y_pred)
+
+
+    precision_weighted = metrics.precision_score(y_true, y_pred, average='weighted')
+    recall_weighted = metrics.recall_score(y_true, y_pred, average='weighted')
+    f1_weighted = metrics.f1_score(y_true, y_pred, average='weighted')
+
+
+    precision_macro = metrics.precision_score(y_true, y_pred, average='macro')
+    recall_macro = metrics.recall_score(y_true, y_pred, average='macro')
+    f1_macro = metrics.f1_score(y_true, y_pred, average='macro')
+
+
+    precision_micro = metrics.precision_score(y_true, y_pred, average='micro')
+    recall_micro = metrics.recall_score(y_true, y_pred, average='micro')
+    f1_micro = metrics.f1_score(y_true, y_pred, average='micro')
+
+
+    kappa = cohen_kappa_score(y_true, y_pred)
+    mcc = matthews_corrcoef(y_true, y_pred)
+
+
+    print(f"Standard Accuracy: {accuracy:.5f} ({accuracy*100:.2f}%)")
+    print(f"Balanced Accuracy: {balanced_acc:.5f} ({balanced_acc*100:.2f}%)")
+    print(f"Cohen's Kappa: {kappa:.5f}")
+    print(f"Matthews Correlation Coefficient: {mcc:.5f}")
+
+    print(f"\nWeighted Metrics (accounts for class imbalance):")
+    print(f"  Precision: {precision_weighted:.5f}")
+    print(f"  Recall:    {recall_weighted:.5f}")
+    print(f"  F1-Score:  {f1_weighted:.5f}")
+
+    print(f"\nMacro Metrics (treats all classes equally):")
+    print(f"  Precision: {precision_macro:.5f}")
+    print(f"  Recall:    {recall_macro:.5f}")
+    print(f"  F1-Score:  {f1_macro:.5f}")
+
+    print(f"\nMicro Metrics (global average):")
+    print(f"  Precision: {precision_micro:.5f}")
+    print(f"  Recall:    {recall_micro:.5f}")
+    print(f"  F1-Score:  {f1_micro:.5f}")
+
+
+    precision_per_class, recall_per_class, f1_per_class, support_per_class = \
+        precision_recall_fscore_support(y_true, y_pred, average=None)
+
+    print(f"\nPer-Class Metrics:")
+    print(f"{'Class':<10} {'Precision':<10} {'Recall':<10} {'F1-Score':<10} {'Support':<10}")
+    print("-" * 50)
+    for i, label in enumerate(class_labels):
+        print(f"{label:<10} {precision_per_class[i]:<10.5f} {recall_per_class[i]:<10.5f} "
+              f"{f1_per_class[i]:<10.5f} {support_per_class[i]:<10}")
+
+
+    unique, counts = np.unique(y_true, return_counts=True)
+    print(f"\nTest Set Class Distribution:")
+    for i, (cls, count) in enumerate(zip(unique, counts)):
+        print(f"  Class {class_labels[cls]}: {count} samples ({count/len(y_true)*100:.1f}%)")
+
+    return {
+        'accuracy': accuracy,
+        'balanced_accuracy': balanced_acc,
+        'kappa': kappa,
+        'mcc': mcc,
+        'precision_weighted': precision_weighted,
+        'recall_weighted': recall_weighted,
+        'f1_weighted': f1_weighted,
+        'precision_macro': precision_macro,
+        'recall_macro': recall_macro,
+        'f1_macro': f1_macro,
+        'precision_micro': precision_micro,
+        'recall_micro': recall_micro,
+        'f1_micro': f1_micro,
+        'per_class_precision': precision_per_class,
+        'per_class_recall': recall_per_class,
+        'per_class_f1': f1_per_class,
+        'per_class_support': support_per_class
+    }
+
+def plot_confusion_matrix(y_true, y_pred, class_labels, title, filename):
+
+    cm = confusion_matrix(y_true, y_pred)
+
+
+    fig, ax = plt.subplots(figsize=(3.5, 3.5))
+
+
+    sns.heatmap(cm, vmin=-1, vmax=1, center=True, annot=True, fmt='d', square=True, linewidths=0.05,
+                linecolor='black', cbar=False)
+
+    ax.set_yticks(np.arange(len(class_labels)) + 0.5)
+    ax.set_yticklabels(class_labels, rotation=0)
+    ax.set_xticks(np.arange(len(class_labels)) + 0.5)
+    ax.set_xticklabels(class_labels, rotation=45)
+    ax.set_ylabel('Actual')
+    ax.set_xlabel('Predicted')
+
+    plt.tight_layout()
+    plt.savefig(f'{filename}.svg', dpi=600, bbox_inches='tight')
+    plt.show()
+
+    return cm
+
+def create_custom_test_split(X, y, test_samples_per_label, random_state=13):
+
+    df = pd.DataFrame(X)
+    df['target'] = y
+
+    unique_classes = np.unique(y)
+
+    test_dfs = []
+    train_dfs = []
+
+    for class_label in unique_classes:
+        class_data = df[df['target'] == class_label].copy()
+        class_data = class_data.sample(frac=1, random_state=random_state)
+
+        samples_needed = test_samples_per_label.get(class_label, 0)
+
+        if len(class_data) >= samples_needed and samples_needed > 0:
+            test_samples = class_data.head(samples_needed)
+            train_samples = class_data.tail(len(class_data) - samples_needed)
+        else:
+            test_samples = pd.DataFrame()
+            train_samples = class_data
+
+        if not test_samples.empty:
+            test_dfs.append(test_samples)
+        if not train_samples.empty:
+            train_dfs.append(train_samples)
+
+    test_df = pd.concat(test_dfs, ignore_index=True) if test_dfs else pd.DataFrame()
+    train_df = pd.concat(train_dfs, ignore_index=True) if train_dfs else pd.DataFrame()
+
+    if not test_df.empty:
+        test_df = test_df.sample(frac=1, random_state=random_state)
+    if not train_df.empty:
+        train_df = train_df.sample(frac=1, random_state=random_state)
+
+    X_test = test_df.iloc[:, :-1].values if not test_df.empty else np.array([])
+    y_test = test_df.iloc[:, -1].values if not test_df.empty else np.array([])
+    X_train = train_df.iloc[:, :-1].values if not train_df.empty else np.array([])
+    y_train = train_df.iloc[:, -1].values if not train_df.empty else np.array([])
+
+    return X_train, X_test, y_train, y_test
+
+# Define class labels
+class_labels = ['NC', 'CS', '3LG', 'LL', 'LLG', 'SLG',
+                'LT', 'LD', 'R', 'AF', '3NL', 'TE', 'HD', '3L']
+
+# Define custom test samples per label
+test_samples_per_label = {
+    0: 40, 1: 47, 2: 38, 3: 39, 4: 41, 5: 29, 6: 44,
+    7: 47, 8: 37, 9: 39, 10: 40, 11: 40, 12: 35, 13: 42
+}
+
+print("="*80)
+print("MACHINE LEARNING MODEL EVALUATION WITH CUSTOM TEST SPLIT")
+print("="*80)
+
+print(f"Custom test samples per class:")
+for class_idx, num_samples in test_samples_per_label.items():
+    print(f"  Class {class_labels[class_idx]} (index {class_idx}): {num_samples} samples")
+
+print("\n" + "="*80)
+print("CUSTOM TEST SET EVALUATION")
+print("="*80)
+
+X_train, X_test, y_train, y_test = create_custom_test_split(
+    X, y, test_samples_per_label, random_state=13)
+
+print(f"Training set size: {len(y_train)} samples")
+print(f"Test set size: {len(y_test)} samples")
+print(f"Total samples: {len(y_train) + len(y_test)}")
+
+
+print("\n5-FOLD CROSS-VALIDATION ON FULL DATASET:")
+xgb_model_cv = xgb.XGBClassifier(random_state=42)
+cv_results = cross_validation_evaluation(X, y, xgb_model_cv, cv_folds=5, random_state=42)
+
+
+print(f"\nTraining XGBoost on custom training set...")
+st = time.process_time()
+xgb_cl = xgb.XGBClassifier(random_state=42)
+xgb_cl.fit(X_train, y_train)
+et = time.process_time()
+train_time = et - st
+print(f'Training time: {train_time:.5f} seconds')
+
+
+st2 = time.process_time()
+pred_XGB = xgb_cl.predict(X_test)
+et2 = time.process_time()
+pred_time = et2 - st2
+print(f'Prediction time: {pred_time:.5f} seconds')
+
+
+results = comprehensive_evaluation(y_test, pred_XGB, class_labels,
+                                 "CUSTOM TEST SET")
+
+
+print(f"\nGenerating confusion matrix...")
+cm = plot_confusion_matrix(y_test, pred_XGB, class_labels,
+                          "XGBoost - Custom Test Set",
+                          "XGBoost_custom")
+
+
+print(f"\n{'='*80}")
+print("FINAL SUMMARY")
+print(f"{'='*80}")
+
+print(f"Cross-Validation Results (5-fold):")
+print(f"  Accuracy: {cv_results['test_accuracy'].mean():.5f} ± {cv_results['test_accuracy'].std():.5f}")
+print(f"  Balanced Accuracy: {cv_results['test_balanced_accuracy'].mean():.5f} ± {cv_results['test_balanced_accuracy'].std():.5f}")
+print(f"  F1-Macro: {cv_results['test_f1_macro'].mean():.5f} ± {cv_results['test_f1_macro'].std():.5f}")
+print(f"  F1-Weighted: {cv_results['test_f1_weighted'].mean():.5f} ± {cv_results['test_f1_weighted'].std():.5f}")
+
+print(f"\nHoldout Test Results:")
+print(f"  Accuracy: {results['accuracy']:.5f} ({results['accuracy']*100:.2f}%)")
+print(f"  Balanced Accuracy: {results['balanced_accuracy']:.5f} ({results['balanced_accuracy']*100:.2f}%)")
+print(f"  F1-Macro: {results['f1_macro']:.5f}")
+print(f"  F1-Weighted: {results['f1_weighted']:.5f}")
+print(f"  Cohen's Kappa: {results['kappa']:.5f}")
+print(f"  Matthews Correlation Coefficient: {results['mcc']:.5f}")
+
+print(f"\nTiming:")
+print(f"  Training Time: {train_time:.5f} seconds")
+print(f"  Prediction Time: {pred_time:.5f} seconds")
+
+
+results_summary = {
+    'Metric': ['accuracy', 'balanced_accuracy', 'f1_macro', 'f1_weighted', 'kappa', 'mcc'],
+    'Cross_Validation_Mean': [cv_results['test_accuracy'].mean(),
+                             cv_results['test_balanced_accuracy'].mean(),
+                             cv_results['test_f1_macro'].mean(),
+                             cv_results['test_f1_weighted'].mean(),
+                             np.nan, np.nan],
+    'Cross_Validation_Std': [cv_results['test_accuracy'].std(),
+                            cv_results['test_balanced_accuracy'].std(),
+                            cv_results['test_f1_macro'].std(),
+                            cv_results['test_f1_weighted'].std(),
+                            np.nan, np.nan],
+    'Holdout_Test': [results['accuracy'], results['balanced_accuracy'],
+                     results['f1_macro'], results['f1_weighted'],
+                     results['kappa'], results['mcc']]
+}
+
+results_df = pd.DataFrame(results_summary)
+results_df.to_csv('model_evaluation_results.csv', index=False)
+print(f"\nResults saved to 'model_evaluation_results.csv'")
+
+print(f"\n{'='*80}")
+print("EVALUATION COMPLETE")
+print(f"{'='*80}")
+
+
+
+
+
+
+
+####Imbalance
+from sklearn import metrics
+from sklearn.metrics import (accuracy_score, confusion_matrix, classification_report,
+                             precision_recall_fscore_support, balanced_accuracy_score,
+                             cohen_kappa_score, matthews_corrcoef)
+from sklearn.model_selection import (cross_validate, train_test_split, StratifiedKFold)
+import seaborn as sns
+import xgboost as xgb
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.utils import shuffle
+
+
+frames = [data1, data2, data3, data4, data5, data6, data7, data8, data9,
+          data10, data11, data12, data13, data14]
+data = pd.concat(frames, ignore_index=True)
+data = shuffle(data, random_state=3)
+data = data.sample(frac=1, random_state=13)
+print("Combined data shape:", data.shape)
+
+data.to_csv('data 6.csv', index=False)
+data = pd.read_csv('data 6.csv')
+X = data.iloc[:, :-1].values
+y = data.iloc[:, -1].values
+
+
+class_labels = ['NC', 'CS', '3LG', 'LL', 'LLG', 'SLG',
+                'LT', 'LD', 'R', 'AF', '3NL', 'TE', 'HD', '3L']
+
+def cross_validation_evaluation(X, y, model, cv_folds=5, random_state=42):
+
+    print(f"\n{'='*60}")
+    print(f"5-FOLD CROSS VALIDATION RESULTS")
+    print(f"{'='*60}")
+
+    scoring = {
+        'accuracy': 'accuracy',
+        'balanced_accuracy': 'balanced_accuracy',
+        'precision_macro': 'precision_macro',
+        'recall_macro': 'recall_macro',
+        'f1_macro': 'f1_macro',
+        'precision_weighted': 'precision_weighted',
+        'recall_weighted': 'recall_weighted',
+        'f1_weighted': 'f1_weighted'
+    }
+
+    cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+    cv_results = cross_validate(model, X, y, cv=cv, scoring=scoring, return_train_score=True)
+
+    print(f"{'Fold':<6} {'Accuracy':<10} {'Bal_Acc':<10} {'W_Recall':<10} {'W_Precision':<13} {'W_F1':<10}")
+    print("-" * 65)
+
+    for fold in range(cv_folds):
+        acc = cv_results['test_accuracy'][fold]
+        bal_acc = cv_results['test_balanced_accuracy'][fold]
+        w_recall = cv_results['test_recall_weighted'][fold]
+        w_precision = cv_results['test_precision_weighted'][fold]
+        w_f1 = cv_results['test_f1_weighted'][fold]
+
+        print(f"{fold+1:<6} {acc:<10.4f} {bal_acc:<10.4f} {w_recall:<10.4f} {w_precision:<13.4f} {w_f1:<10.4f}")
+
+    print("-" * 65)
+    print(f"{'Mean':<6} "
+          f"{cv_results['test_accuracy'].mean():<10.4f} "
+          f"{cv_results['test_balanced_accuracy'].mean():<10.4f} "
+          f"{cv_results['test_recall_weighted'].mean():<10.4f} "
+          f"{cv_results['test_precision_weighted'].mean():<13.4f} "
+          f"{cv_results['test_f1_weighted'].mean():<10.4f}")
+
+    print(f"{'Std':<6} "
+          f"{cv_results['test_accuracy'].std():<10.4f} "
+          f"{cv_results['test_balanced_accuracy'].std():<10.4f} "
+          f"{cv_results['test_recall_weighted'].std():<10.4f} "
+          f"{cv_results['test_precision_weighted'].std():<13.4f} "
+          f"{cv_results['test_f1_weighted'].std():<10.4f}")
+
+    return cv_results
+
+def comprehensive_evaluation(y_true, y_pred, class_labels, scenario_name):
+    print(f"\n{'='*60}")
+    print(f"EVALUATION RESULTS - {scenario_name}")
+    print(f"{'='*60}")
+
+    accuracy = accuracy_score(y_true, y_pred)
+    balanced_acc = balanced_accuracy_score(y_true, y_pred)
+
+    precision_weighted = metrics.precision_score(y_true, y_pred, average='weighted')
+    recall_weighted = metrics.recall_score(y_true, y_pred, average='weighted')
+    f1_weighted = metrics.f1_score(y_true, y_pred, average='weighted')
+
+    precision_macro = metrics.precision_score(y_true, y_pred, average='macro')
+    recall_macro = metrics.recall_score(y_true, y_pred, average='macro')
+    f1_macro = metrics.f1_score(y_true, y_pred, average='macro')
+
+    precision_micro = metrics.precision_score(y_true, y_pred, average='micro')
+    recall_micro = metrics.recall_score(y_true, y_pred, average='micro')
+    f1_micro = metrics.f1_score(y_true, y_pred, average='micro')
+
+    kappa = cohen_kappa_score(y_true, y_pred)
+    mcc = matthews_corrcoef(y_true, y_pred)
+
+    print(f"Standard Accuracy: {accuracy:.4f}")
+    print(f"Balanced Accuracy: {balanced_acc:.4f}")
+    print(f"Cohen's Kappa: {kappa:.4f}")
+    print(f"Matthews Correlation Coefficient: {mcc:.4f}")
+
+    print(f"\nWeighted Metrics:")
+    print(f"  Precision: {precision_weighted:.4f}")
+    print(f"  Recall:    {recall_weighted:.4f}")
+    print(f"  F1-Score:  {f1_weighted:.4f}")
+
+    print(f"\nMacro Metrics:")
+    print(f"  Precision: {precision_macro:.4f}")
+    print(f"  Recall:    {recall_macro:.4f}")
+    print(f"  F1-Score:  {f1_macro:.4f}")
+
+    print(f"\nMicro Metrics:")
+    print(f"  Precision: {precision_micro:.4f}")
+    print(f"  Recall:    {recall_micro:.4f}")
+    print(f"  F1-Score:  {f1_micro:.4f}")
+
+    precision_per_class, recall_per_class, f1_per_class, support_per_class = \
+        precision_recall_fscore_support(y_true, y_pred, average=None)
+
+    print(f"\nPer-Class Metrics:")
+    print(f"{'Class':<10} {'Precision':<10} {'Recall':<10} {'F1-Score':<10} {'Support':<10}")
+    print("-" * 50)
+    for i, label in enumerate(class_labels):
+        print(f"{label:<10} {precision_per_class[i]:<10.4f} {recall_per_class[i]:<10.4f} "
+              f"{f1_per_class[i]:<10.4f} {support_per_class[i]:<10}")
+
+    return {
+        'accuracy': accuracy,
+        'balanced_accuracy': balanced_acc,
+        'kappa': kappa,
+        'mcc': mcc,
+        'precision_weighted': precision_weighted,
+        'recall_weighted': recall_weighted,
+        'f1_weighted': f1_weighted,
+        'precision_macro': precision_macro,
+        'recall_macro': recall_macro,
+        'f1_macro': f1_macro,
+        'precision_micro': precision_micro,
+        'recall_micro': recall_micro,
+        'f1_micro': f1_micro,
+        'per_class_f1': f1_per_class
+    }
+
+def plot_confusion_matrix(y_true, y_pred, class_labels, title, filename):
+    cm = confusion_matrix(y_true, y_pred)
+    fig, ax = plt.subplots(figsize=(3.5, 3.5))
+    sns.heatmap(cm, vmin=-1, vmax=1, center=True, annot=True, fmt='d',
+                square=True, linewidths=0.05, linecolor='black', cbar=False)
+    ax.set_yticks(np.arange(len(class_labels)) + 0.5)
+    ax.set_yticklabels(class_labels, rotation=0)
+    ax.set_xticks(np.arange(len(class_labels)) + 0.5)
+    ax.set_xticklabels(class_labels, rotation=45)
+    ax.set_ylabel('Actual')
+    ax.set_xlabel('Predicted')
+    plt.tight_layout()
+    plt.savefig(f'{filename}.svg', dpi=600, bbox_inches='tight')
+    plt.show()
+    return cm
+
+
+print("="*80)
+print("MACHINE LEARNING MODEL EVALUATION WITH CROSS-VALIDATION")
+print("="*80)
+
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=13, stratify=y)
+
+
+xgb_model_cv = xgb.XGBClassifier(random_state=42)
+cv_results = cross_validation_evaluation(X, y, xgb_model_cv)
+
+
+print(f"\nTraining XGBoost...")
+st = time.process_time()
+# xgb_cl = xgb.XGBClassifier(random_state=42)
+xgb_model_cv = xgb.XGBClassifier(
+    n_estimators=110,
+    max_depth=3,
+    learning_rate=0.245,
+    subsample=0.655,
+    colsample_bytree=0.860,
+    gamma=0.0,
+    min_child_weight=1,
+    reg_alpha=0.0,
+    reg_lambda=0.0,
+    objective='multi:softprob',
+    use_label_encoder=False,
+    random_state=42,
+    eval_metric='mlogloss'
+)
+xgb_cl.fit(X_train, y_train)
+et = time.process_time()
+print(f"Training time: {et - st:.4f} seconds")
+
+# Predict
+st = time.process_time()
+y_pred = xgb_cl.predict(X_test)
+et = time.process_time()
+print(f"Prediction time: {et - st:.4f} seconds")
+
+# Evaluation
+results = comprehensive_evaluation(y_test, y_pred, class_labels, "IMBALANCED TEST SET")
+
+# Confusion matrix
+_ = plot_confusion_matrix(y_test, y_pred, class_labels,
+                          "XGBoost - Imbalanced Test Set", "XGBoost_imbalanced")
